@@ -21,13 +21,13 @@ on:
     inputs:
       packages:
         description: '要编译的包(空格分隔)'
-        default: 'daed vmlinux-btf'
+        default: 'daed luci-app-daede'
       arch:
         description: '目标架构(照抄 openwrt-daede release.yml 里用的名字,例如 x86_64 / aarch64_generic / aarch64_cortex-a53)'
-        default: 'x86_64'
+        default: 'aarch64_cortex-a53'
       sdk:
         description: 'OpenWrt/ImmortalWrt 版本'
-        default: '24.10'
+        default: '25.12'
 
 permissions:
   contents: read
@@ -54,7 +54,7 @@ jobs:
       - name: Build packages
         uses: kenzok8/gh-action-sdk@main
         env:
-          CONTAINER: immortalwrt/sdk
+          CONTAINER: openwrt/sdk
           ARCH: ${{ inputs.arch }}-openwrt-${{ inputs.sdk }}
           FEEDNAME: daede
           PACKAGES: ${{ inputs.packages }}
@@ -72,17 +72,36 @@ jobs:
           GOLANG_REPO: https://github.com/kenzok8/golang
           GOLANG_BRANCH: '1.26'
 
-      - name: List built packages
+      # FEED_DIR is deliberately just bin/packages/<arch>/daede - NOT
+      # <arch>-openwrt-<sdk> (that longer form is only the docker image tag
+      # used above to pick the right SDK container). Confirmed against
+      # kenzok8/openwrt-daede's own release.yml "Collect packages" step,
+      # which uses this exact same bare-arch path.
+      - name: Collect packages
         if: always()
-        run: ls -la "bin/packages/${{ inputs.arch }}-openwrt-${{ inputs.sdk }}/daede/" 2>/dev/null || echo "no output dir - check the build log above"
+        run: |
+          ARCH="${{ inputs.arch }}"
+          mkdir -p dist
+          FEED_DIR="bin/packages/${ARCH}/daede"
+          echo "Looking in $FEED_DIR"
+          ls -la "$FEED_DIR" 2>/dev/null || echo "(directory doesn't exist - build likely failed, check the 'Build packages' step log above)"
+
+          for f in "$FEED_DIR"/*.ipk; do
+            [ -f "$f" ] || continue
+            case "$(basename "$f")" in Packages*) continue ;; esac
+            cp -v "$f" dist/
+          done
+
+          for f in "$FEED_DIR"/*.apk; do
+            [ -f "$f" ] || continue
+            case "$(basename "$f")" in Packages*|APKINDEX*|packages.adb*) continue ;; esac
+            cp -v "$f" dist/
+          done
 
       - name: Upload artifact
         uses: actions/upload-artifact@v6
         if: always()
         with:
           name: daed-custom-webui-${{ inputs.arch }}-sdk${{ inputs.sdk }}
-          path: |
-            bin/packages/${{ inputs.arch }}-openwrt-${{ inputs.sdk }}/daede/*.ipk
-            bin/packages/${{ inputs.arch }}-openwrt-${{ inputs.sdk }}/daede/*.apk
-            logs/**
+          path: dist/
           if-no-files-found: warn
