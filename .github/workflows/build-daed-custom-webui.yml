@@ -1,4 +1,4 @@
-name: Build daed (custom dark WebUI)
+name: Build daed (news custom dark WebUI)
 
 # Manually build `daed` (with the custom dark-dashboard WebUI baked in, via
 # daed/Makefile + daed/custom-web/ committed in this fork) for one router
@@ -30,7 +30,7 @@ on:
         default: '25.12'
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   build:
@@ -72,6 +72,50 @@ jobs:
           GOLANG_REPO: https://github.com/kenzok8/golang
           GOLANG_BRANCH: '1.26'
 
+      # gh-action-sdk's entrypoint.sh defaults BUILD_LOG to 1 (we never
+      # override it above), which makes OpenWrt's build system redirect each
+      # package's *actual* build output (the real compiler/shell error) into
+      # logs/**/*.txt instead of printing it to the "Build packages" step's
+      # console - that step only ever shows a one-line summary like
+      # "ERROR: package/feeds/daede/daed failed to build." with no detail.
+      # gh-action-sdk does move logs/ out of the container back into the
+      # workspace root (same level as bin/, read by "Collect packages"
+      # below) - this step just prints whatever it finds for the package(s)
+      # we asked for, so the real error is visible right here instead of
+      # silently discarded when the runner is torn down.
+      - name: Show build logs
+        if: always()
+        run: |
+          if [ ! -d logs ]; then
+            echo "No logs/ directory was produced."
+            exit 0
+          fi
+          found=0
+          for pkg in ${{ inputs.packages }}; do
+            while IFS= read -r dir; do
+              for f in "$dir"/*.txt; do
+                [ -f "$f" ] || continue
+                found=1
+                echo "::group::$f"
+                cat "$f"
+                echo "::endgroup::"
+              done
+            done < <(find logs -type d -iname "$pkg")
+          done
+          [ "$found" = '1' ] || echo "No per-package log files matched ${{ inputs.packages }} under logs/ - see the full logs/ artifact instead."
+
+      # Full logs/ tree (every phase - prepare/configure/compile/install -
+      # for every package touched, not just the ones matched above) as a
+      # downloadable artifact, in case the console output above is
+      # truncated or you need more context than just the failing package.
+      - name: Upload full build logs
+        uses: actions/upload-artifact@v6
+        if: always()
+        with:
+          name: build-logs-${{ inputs.arch }}-sdk${{ inputs.sdk }}
+          path: logs/
+          if-no-files-found: ignore
+
       # FEED_DIR is deliberately just bin/packages/<arch>/daede - NOT
       # <arch>-openwrt-<sdk> (that longer form is only the docker image tag
       # used above to pick the right SDK container). Confirmed against
@@ -83,20 +127,28 @@ jobs:
           ARCH="${{ inputs.arch }}"
           mkdir -p dist
           FEED_DIR="bin/packages/${ARCH}/daede"
+
           echo "Looking in $FEED_DIR"
-          ls -la "$FEED_DIR" 2>/dev/null || echo "(directory doesn't exist - build likely failed, check the 'Build packages' step log above)"
+          ls -la "$FEED_DIR" 2>/dev/null || echo "(directory doesn't exist - build likely failed)"
 
           for f in "$FEED_DIR"/*.ipk; do
             [ -f "$f" ] || continue
-            case "$(basename "$f")" in Packages*) continue ;; esac
+            case "$(basename "$f")" in
+              Packages*) continue ;;
+            esac
             cp -v "$f" dist/
           done
 
           for f in "$FEED_DIR"/*.apk; do
             [ -f "$f" ] || continue
-            case "$(basename "$f")" in Packages*|APKINDEX*|packages.adb*) continue ;; esac
+            case "$(basename "$f")" in
+              Packages*|APKINDEX*|packages.adb*) continue ;;
+            esac
             cp -v "$f" dist/
           done
+
+          echo "=== Release files ==="
+          ls -lah dist/
 
       - name: Upload artifact
         uses: actions/upload-artifact@v6
@@ -105,3 +157,31 @@ jobs:
           name: daed-custom-webui-${{ inputs.arch }}-sdk${{ inputs.sdk }}
           path: dist/
           if-no-files-found: warn
+
+      - name: Publish to GitHub Release
+        if: success()
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: daed-${{ inputs.arch }}-sdk${{ inputs.sdk }}-build.${{ github.run_number }}
+          name: daed ${{ inputs.arch }} SDK ${{ inputs.sdk }} Build ${{ github.run_number }}
+          body: |
+            ## daed Custom WebUI
+
+            | 项目 | 信息 |
+            |---|---|
+            | Architecture | `${{ inputs.arch }}` |
+            | SDK | `${{ inputs.sdk }}` |
+            | Build | `${{ github.run_number }}` |
+            | Commit | `${{ github.sha }}` |
+
+            编译完成的 OpenWrt 插件：
+
+            - daed
+            - luci-app-daede
+
+          files: |
+            dist/*.ipk
+            dist/*.apk
+          fail_on_unmatched_files: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
