@@ -21,7 +21,7 @@ on:
     inputs:
       packages:
         description: '要编译的包(空格分隔)'
-        default: 'daed luci-app-daede'
+        default: 'daed luci-app-daede vmlinux-btf'
       arch:
         description: '目标架构(照抄 openwrt-daede release.yml 里用的名字,例如 x86_64 / aarch64_generic / aarch64_cortex-a53)'
         default: 'aarch64_cortex-a53'
@@ -179,8 +179,7 @@ jobs:
             - daed
             - luci-app-daede
 
-          files: |
-            dist/*.ipk
+          files:
             dist/*.apk
           fail_on_unmatched_files: true
         env:
