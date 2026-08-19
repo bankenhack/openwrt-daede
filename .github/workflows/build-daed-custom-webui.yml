@@ -1,4 +1,4 @@
-name: Build daed (news custom dark WebUI)
+name: Build daed (sb custom dark WebUI)
 
 # Manually build `daed` (with the custom dark-dashboard WebUI baked in, via
 # daed/Makefile + daed/custom-web/ committed in this fork) for one router
