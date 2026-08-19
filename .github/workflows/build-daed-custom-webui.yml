@@ -178,6 +178,7 @@ jobs:
 
             - daed
             - luci-app-daede
+            - vmlinux-btf
 
           files:
             dist/*.apk
