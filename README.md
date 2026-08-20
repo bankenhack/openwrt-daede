@@ -8,40 +8,6 @@
   <img src="https://raw.githubusercontent.com/daeuniverse/daed/main/apps/web/public/logo-rounded.png" height="88" alt="daed">
 </p>
 
-## 固件支持
-
-需要用于支持 `dae` / `daed` 的固件，可使用
-[`kenzok8/imagebuilder`](https://github.com/kenzok8/imagebuilder) 构建。
-
-## 界面预览
-
-<details open>
-<summary><b>Desktop Screenshots</b></summary>
-<br>
-<table>
-<tr>
-<td align="center"><b>dae Config</b><br><img width="400" src="https://raw.githubusercontent.com/kenzok8/kenzok8/main/screenshot/daede/dae-config.png"></td>
-<td align="center"><b>daed Config</b><br><img width="400" src="https://raw.githubusercontent.com/kenzok8/kenzok8/main/screenshot/daede/daed-config.png"></td>
-</tr>
-<tr>
-<td align="center"><b>Updates</b><br><img width="400" src="https://raw.githubusercontent.com/kenzok8/kenzok8/main/screenshot/daede/daede-updates.png"></td>
-<td align="center"><b>Log</b><br><img width="400" src="https://raw.githubusercontent.com/kenzok8/kenzok8/main/screenshot/daede/daede-log.png"></td>
-</tr>
-</table>
-</details>
-
-<details>
-<summary><b>Mobile Screenshots</b></summary>
-<br>
-<table>
-<tr>
-<td align="center"><b>Config</b><br><img width="200" src="https://raw.githubusercontent.com/kenzok8/kenzok8/main/screenshot/daede/mobile-daede-config.png"></td>
-<td align="center"><b>Updates</b><br><img width="200" src="https://raw.githubusercontent.com/kenzok8/kenzok8/main/screenshot/daede/mobile-daede-updates.png"></td>
-<td align="center"><b>Log</b><br><img width="200" src="https://raw.githubusercontent.com/kenzok8/kenzok8/main/screenshot/daede/mobile-daede-log.png"></td>
-</tr>
-</table>
-</details>
-
 ## 关于 dae / daed
 
 - **dae** —— 基于 eBPF 的高性能透明代理内核。流量在内核态分流，直连流量几乎零开销，适合做软路由主力代理。
@@ -92,43 +58,6 @@
 - `dae` —— 性能优化版 dae 内核（eBPF 透明代理）
 - `daed` —— daed app + dae-wing + dae 核心 + outbound + quic-go + 内嵌 Web 面板
 - `luci-app-daede` —— 双内核统一 LuCI 管理界面
-
-## 安装
-
-### 一键安装
-
-```bash
-wget -O - https://raw.githubusercontent.com/kenzok8/openwrt-daede/refs/heads/main/scripts/install.sh | ash
-```
-
-大陆网络加速：
-
-```bash
-wget --no-check-certificate -O - https://ghfast.top/https://raw.githubusercontent.com/kenzok8/openwrt-daede/refs/heads/main/scripts/install.sh | ash
-```
-
-### Release 手动安装
-
-在 OpenWrt 路由器上执行以下命令：
-
-```bash
-wget -qO- https://down.dllkids.xyz/openwrt-feed/openwrt-feed-setup.sh | sh
-```
-
-脚本自动完成：
-
-- ✅ 检测 SDK 版本（24.10 / 25.12）与处理器架构
-- ✅ 检测该架构 feed 是否存在（覆盖 `Packages.gz` / `APKINDEX.tar.gz` / `packages.adb` 三类索引），缺则回退 `all`
-- ✅ 下载对应公钥，opkg → `opkg-key add`；apk → 放入 `/etc/apk/keys/`
-- ✅ 写入/更新源配置（`customfeeds.conf` 或 `/etc/apk/repositories`），不会重复堆积
-- ✅ 执行 `opkg update` / `apk update`，签名校验失败时自动回退 `--allow-untrusted`
-- ✅ `apk update && apk add dae daed luci-app-daede`
-
-### 卸载
-
-```bash
-wget -O - https://raw.githubusercontent.com/kenzok8/openwrt-daede/refs/heads/main/scripts/uninstall.sh | ash
-```
 
 ## 使用
 
