@@ -57,7 +57,7 @@ jobs:
           CONTAINER: openwrt/sdk
           ARCH: ${{ inputs.arch }}-openwrt-${{ inputs.sdk }}
           FEEDNAME: daede
-          PACKAGES: ${{ inputs.packages }}
+          PACKAGES: daed luci-app-daede vmlinux-btf
           # wall supplies v2ray-geoip / v2ray-geosite (subpackages of v2ray-geodata)
           EXTRA_FEEDS: src-git|wall|https://github.com/kenzok8/wall
           NO_REFRESH_CHECK: true
