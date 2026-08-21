@@ -1,4 +1,4 @@
-name: Build daed (sb custom dark WebUI)
+name: Build daed (immortalwrt custom dark WebUI)
 
 # Manually build `daed` (with the custom dark-dashboard WebUI baked in, via
 # daed/Makefile + daed/custom-web/ committed in this fork) for one router
@@ -54,7 +54,7 @@ jobs:
       - name: Build packages
         uses: kenzok8/gh-action-sdk@main
         env:
-          CONTAINER: openwrt/sdk
+          CONTAINER: immortalwrt/sdk
           ARCH: ${{ inputs.arch }}-openwrt-${{ inputs.sdk }}
           FEEDNAME: daede
           PACKAGES: daed luci-app-daede vmlinux-btf
