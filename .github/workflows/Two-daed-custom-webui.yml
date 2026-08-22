@@ -203,7 +203,7 @@ jobs:
             | SDK | `${{ matrix.sdk }}` |
             | Build | `${{ github.run_number }}` |
             | Commit | `${{ github.sha }}` |
-            | 编译时间 | ${{ steps.tag.outputs.time }} |
+            | 编译时间 | ${{ steps.date.outputs.date }} |
 
             编译完成的 OpenWrt 插件：
 
