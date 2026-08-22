@@ -1,4 +1,4 @@
-name: Build daed (sb custom dark WebUI)
+name: Build daed (OK custom dark WebUI)
 
 # Manually build `daed` (with the custom dark-dashboard WebUI baked in, via
 # daed/Makefile + daed/custom-web/ committed in this fork) for one router
@@ -31,7 +31,10 @@ on:
 
 permissions:
   contents: write
-
+  
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+  
 jobs:
   build:
     name: ${{ inputs.arch }} · SDK ${{ inputs.sdk }}
@@ -58,10 +61,10 @@ jobs:
       - name: Build packages
         uses: kenzok8/gh-action-sdk@main
         env:
-          CONTAINER: openwrt/sdk
+          CONTAINER: immortalwrt/sdk
           ARCH: ${{ inputs.arch }}-openwrt-${{ inputs.sdk }}
           FEEDNAME: daede
-          PACKAGES: ${{ inputs.packages }}
+          PACKAGES: daed luci-app-daede vmlinux-btf
           # wall supplies v2ray-geoip / v2ray-geosite (subpackages of v2ray-geodata)
           EXTRA_FEEDS: src-git|wall|https://github.com/kenzok8/wall
           NO_REFRESH_CHECK: true
@@ -177,7 +180,8 @@ jobs:
             | SDK | `${{ inputs.sdk }}` |
             | Build | `${{ github.run_number }}` |
             | Commit | `${{ github.sha }}` |
-
+            | 编译时间 | ${{ steps.tag.outputs.time }} |
+            
             编译完成的 OpenWrt 插件：
 
             - daed
