@@ -1,4 +1,4 @@
-name: Two Build daed (custom dark WebUI)
+name: JB Two Build daed (custom dark WebUI)
 
 # Manually build `daed` (with the custom dark-dashboard WebUI baked in, via
 # daed/Makefile + daed/custom-web/ committed in this fork) for one router
