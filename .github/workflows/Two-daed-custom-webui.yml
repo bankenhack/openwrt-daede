@@ -1,0 +1,224 @@
+name: Two Build daed (custom dark WebUI)
+
+# Manually build `daed` (with the custom dark-dashboard WebUI baked in, via
+# daed/Makefile + daed/custom-web/ committed in this fork) for one router
+# architecture, using kenzok8/openwrt-daede's own proven build recipe
+# (mirrors their .github/workflows/release.yml build job almost line for
+# line - see that file in the upstream repo for the full multi-arch matrix
+# this is derived from).
+#
+# Builds BOTH SDK branches for the chosen architecture in the same run, as
+# two parallel matrix jobs: 25.12 (apk-format packages) and 24.10
+# (ipk-format packages) - see `strategy.matrix.sdk` below. Each leg publishes
+# its own GitHub Release (distinct tag per SDK, so they never collide).
+#
+# This does NOT publish anything else - it just builds and attaches the
+# .ipk/.apk as a downloadable GitHub Actions artifact for you to grab and
+# opkg/apk install manually.
+#
+# Want more than one architecture in a single run? GitHub Actions has no
+# string-split expression function, so a comma-separated input can't be
+# turned into a matrix without an extra job just to parse it. Simplest is
+# just re-running this workflow once per architecture you need.
+
+on:
+  workflow_dispatch:
+    inputs:
+      packages:
+        description: '要编译的包(空格分隔)'
+        default: 'daed luci-app-daede vmlinux-btf'
+      arch:
+        description: '目标架构(照抄 openwrt-daede release.yml 里用的名字,例如 x86_64 / aarch64_generic / aarch64_cortex-a53)'
+        default: 'aarch64_cortex-a53'
+
+permissions:
+  contents: write
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+jobs:
+  build:
+    name: ${{ inputs.arch }} · SDK ${{ matrix.sdk }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # 25.12 = apk-format packages, 24.10 = ipk-format packages. Both
+        # legs run in parallel; if you only want one, cancel the other run
+        # manually from the Actions tab, or drop a value from this list.
+        sdk: ['25.12', '24.10']
+
+    steps:
+      - uses: actions/checkout@v6
+
+      # Tag/date the release by when it was actually built, not just an
+      # incrementing run number - Asia/Shanghai so "today" in the tag
+      # matches Beijing time rather than the runner's UTC clock (which can
+      # read as "yesterday" for evening/night builds).
+      - name: Compute build date
+        id: date
+        run: echo "date=$(TZ='Asia/Shanghai' date +'%Y-%m-%d')" >> "$GITHUB_OUTPUT"
+
+      # Heavy dae/daed + Go toolchain builds can exhaust the runner's default
+      # disk space - this is copied straight from kenzok8's own release.yml,
+      # which added it after hitting real "No space left on device" failures.
+      - name: Free disk space
+        run: |
+          sudo rm -rf /usr/share/dotnet /opt/ghc /usr/local/lib/android \
+                      /usr/local/share/boost /opt/hostedtoolcache/CodeQL \
+                      /usr/local/.ghcup 2>/dev/null || true
+          sudo docker image prune -af || true
+          df -h /
+
+      - name: Build packages
+        uses: kenzok8/gh-action-sdk@main
+        env:
+          CONTAINER: immortalwrt/sdk
+          ARCH: ${{ inputs.arch }}-openwrt-${{ matrix.sdk }}
+          FEEDNAME: daede
+          PACKAGES: daed luci-app-daede vmlinux-btf
+          # wall supplies v2ray-geoip / v2ray-geosite (subpackages of v2ray-geodata)
+          EXTRA_FEEDS: src-git|wall|https://github.com/kenzok8/wall
+          NO_REFRESH_CHECK: true
+          IGNORE_ERRORS: false
+          INDEX: 0
+          # KEY_BUILD signs ipk (24.10), PRIVATE_KEY signs apk (25.12) -
+          # harmless to pass both on every leg, the SDK's own package
+          # manager for that branch just uses whichever one applies.
+          KEY_BUILD: ${{ secrets.OPKG_KEY_BUILD }}
+          PRIVATE_KEY: ${{ secrets.APK_PRIVATE_KEY }}
+          # dae / daed go.mod requires Go 1.26; override SDK's bundled golang.
+          # (copied from kenzok8/openwrt-daede's own release.yml - their SDK's
+          # stock golang feed package doesn't support 1.26 / the GOEXPERIMENT
+          # flags daed's Makefile needs yet). Same override for both SDK
+          # branches - untested whether kenzok8/golang's 1.26 branch is also
+          # fine against 24.10's older base toolchain; watch the 24.10 leg's
+          # first run for anything golang-related in the build logs.
+          GOLANG_REPO: https://github.com/kenzok8/golang
+          GOLANG_BRANCH: '1.26'
+
+      # gh-action-sdk's entrypoint.sh defaults BUILD_LOG to 1 (we never
+      # override it above), which makes OpenWrt's build system redirect each
+      # package's *actual* build output (the real compiler/shell error) into
+      # logs/**/*.txt instead of printing it to the "Build packages" step's
+      # console - that step only ever shows a one-line summary like
+      # "ERROR: package/feeds/daede/daed failed to build." with no detail.
+      # gh-action-sdk does move logs/ out of the container back into the
+      # workspace root (same level as bin/, read by "Collect packages"
+      # below) - this step just prints whatever it finds for the package(s)
+      # we asked for, so the real error is visible right here instead of
+      # silently discarded when the runner is torn down.
+      - name: Show build logs
+        if: always()
+        run: |
+          if [ ! -d logs ]; then
+            echo "No logs/ directory was produced."
+            exit 0
+          fi
+          found=0
+          for pkg in ${{ inputs.packages }}; do
+            while IFS= read -r dir; do
+              for f in "$dir"/*.txt; do
+                [ -f "$f" ] || continue
+                found=1
+                echo "::group::$f"
+                cat "$f"
+                echo "::endgroup::"
+              done
+            done < <(find logs -type d -iname "$pkg")
+          done
+          [ "$found" = '1' ] || echo "No per-package log files matched ${{ inputs.packages }} under logs/ - see the full logs/ artifact instead."
+
+      # Full logs/ tree (every phase - prepare/configure/compile/install -
+      # for every package touched, not just the ones matched above) as a
+      # downloadable artifact, in case the console output above is
+      # truncated or you need more context than just the failing package.
+      - name: Upload full build logs
+        uses: actions/upload-artifact@v6
+        if: always()
+        with:
+          name: build-logs-${{ inputs.arch }}-sdk${{ matrix.sdk }}
+          path: logs/
+          if-no-files-found: ignore
+
+      # FEED_DIR is deliberately just bin/packages/<arch>/daede - NOT
+      # <arch>-openwrt-<sdk> (that longer form is only the docker image tag
+      # used above to pick the right SDK container). Confirmed against
+      # kenzok8/openwrt-daede's own release.yml "Collect packages" step,
+      # which uses this exact same bare-arch path.
+      - name: Collect packages
+        if: always()
+        run: |
+          ARCH="${{ inputs.arch }}"
+          mkdir -p dist
+          FEED_DIR="bin/packages/${ARCH}/daede"
+
+          echo "Looking in $FEED_DIR"
+          ls -la "$FEED_DIR" 2>/dev/null || echo "(directory doesn't exist - build likely failed)"
+
+          for f in "$FEED_DIR"/*.ipk; do
+            [ -f "$f" ] || continue
+            case "$(basename "$f")" in
+              Packages*) continue ;;
+            esac
+            cp -v "$f" dist/
+          done
+
+          for f in "$FEED_DIR"/*.apk; do
+            [ -f "$f" ] || continue
+            case "$(basename "$f")" in
+              Packages*|APKINDEX*|packages.adb*) continue ;;
+            esac
+            cp -v "$f" dist/
+          done
+
+          echo "=== Release files ==="
+          ls -lah dist/
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v6
+        if: always()
+        with:
+          name: daed-custom-webui-${{ inputs.arch }}-sdk${{ matrix.sdk }}
+          path: dist/
+          if-no-files-found: warn
+
+      - name: Publish to GitHub Release
+        if: success()
+        uses: softprops/action-gh-release@v2
+        with:
+          # SDK suffix keeps the 25.12 (apk) and 24.10 (ipk) legs of this
+          # run on two distinct tags/releases - without it they'd both
+          # resolve to the same tag_name and race each other publishing to
+          # the same release at the same time.
+          tag_name: ${{ steps.date.outputs.date }}-build.${{ github.run_number }}-sdk${{ matrix.sdk }}
+          name: daed ${{ inputs.arch }} SDK ${{ matrix.sdk }} Build ${{ github.run_number }}
+          body: |
+            ## daed Custom WebUI
+
+            | 项目 | 信息 |
+            |---|---|
+            | Architecture | `${{ inputs.arch }}` |
+            | SDK | `${{ matrix.sdk }}` |
+            | Build | `${{ github.run_number }}` |
+            | Commit | `${{ github.sha }}` |
+            | 编译时间 | ${{ steps.tag.outputs.time }} |
+
+            编译完成的 OpenWrt 插件：
+
+            - daed
+            - luci-app-daede
+            - vmlinux-btf
+
+          # Not `dist/*.apk` - the 24.10 leg only produces .ipk, and that
+          # glob would then match zero files and fail the step (since
+          # fail_on_unmatched_files is on below). `dist/*` covers both
+          # formats; Collect packages already excludes the Packages*/
+          # APKINDEX* index files, so everything left in dist/ is a real
+          # package worth uploading either way.
+          files:
+            dist/*
+          fail_on_unmatched_files: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
