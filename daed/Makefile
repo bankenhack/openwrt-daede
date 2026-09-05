@@ -98,6 +98,9 @@ define Build/Prepare
 	$(TAR) --strip-components=1 -C $(DAED_BUILD_DIR) -xzf $(DL_DIR)/$(PKG_SOURCE)
 	$(if $(wildcard $(CURDIR)/patches/*.patch),$(call PatchDir,$(PKG_BUILD_DIR),$(CURDIR)/patches,))
 	$(if $(filter arm,$(ARCH)),$(if $(wildcard $(CURDIR)/patches_arm/*.patch),$(call PatchDir,$(PKG_BUILD_DIR),$(CURDIR)/patches_arm,)))
+	rm -rf $(PKG_BUILD_DIR)/webrender/web
+	mkdir -p $(PKG_BUILD_DIR)/webrender/web
+	cp -a $(CURDIR)/custom-web/. $(PKG_BUILD_DIR)/webrender/web/
 endef
 
 DAE_CFLAGS:= \
